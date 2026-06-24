@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: psp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: psp
+      POSTGRES_PASSWORD: psp
+      POSTGRES_DB: psp_portal
+    # The web service reaches the DB over the internal network (db:5432).
+    # Uncomment to also expose it on the host (pick a free port to avoid clashes):
+    # ports:
+    #   - "5544:5432"
+    volumes:
+      - psp_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U psp -d psp_portal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    container_name: psp-web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://psp:psp@db:5432/psp_portal?schema=public"
+      # CHANGE THESE before any real deployment:
+      AUTH_SECRET: "${AUTH_SECRET:-please-change-me-to-a-long-random-string}"
+      APP_BASE_URL: "${APP_BASE_URL:-http://localhost:3000}"
+      # Initial admin (created on first boot when RUN_SEED=true). Admin can change
+      # the password later from inside the app (Settings → Account).
+      ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@psp.local}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-changeme}"
+      RUN_SEED: "true"
+    ports:
+      - "3000:3000"
+
+volumes:
+  psp_pgdata:
