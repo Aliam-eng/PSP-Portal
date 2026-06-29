@@ -13,19 +13,21 @@ export default async function ReturnPage({ searchParams }: { searchParams: { tx?
   return (
     <>
       <PublicHeader />
-      <main className="mx-auto max-w-xl px-4 py-8">
-        <h1 className="text-xl font-semibold">Payment status</h1>
+      <main className="mx-auto max-w-xl px-5 py-12 sm:py-16">
+        <h1 className="animate-fade-up text-2xl font-semibold tracking-tight text-ink">Payment status</h1>
         {!tx ? (
-          <p className="mt-4 rounded-md border bg-white p-4 text-sm text-slate-500">Transaction not found.</p>
+          <div className="card mt-6 p-6 text-sm text-ink-muted animate-fade-up">Transaction not found.</div>
         ) : (
-          <ReturnStatus
-            txId={tx.id}
-            reference={tx.reference}
-            amount={tx.amount}
-            currency={tx.currency}
-            mt5Login={tx.mt5Login}
-            initialStatus={tx.status}
-          />
+          <div className="mt-6 animate-fade-up">
+            <ReturnStatus
+              txId={tx.id}
+              reference={tx.reference}
+              amount={tx.amount}
+              currency={tx.currency}
+              mt5Login={tx.mt5Login}
+              initialStatus={tx.status}
+            />
+          </div>
         )}
       </main>
     </>

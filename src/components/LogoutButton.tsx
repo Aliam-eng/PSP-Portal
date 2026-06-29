@@ -10,7 +10,7 @@ export function LogoutButton() {
     router.refresh();
   }
   return (
-    <button onClick={signOut} className="text-slate-500 hover:text-rose-600" type="button">
+    <button onClick={signOut} className="btn-quiet" type="button">
       Sign out
     </button>
   );

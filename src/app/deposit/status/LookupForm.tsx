@@ -19,12 +19,9 @@ export function LookupForm({ initial }: { initial: string }) {
         value={ref}
         onChange={(e) => setRef(e.target.value)}
         placeholder="PSP-XXXXXXXX"
-        className="flex-1 rounded-md border px-3 py-2 text-sm outline-none focus:border-brand"
+        className="field-input flex-1 font-mono"
       />
-      <button
-        type="submit"
-        className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
-      >
+      <button type="submit" className="btn-primary shrink-0">
         Check
       </button>
     </form>

@@ -30,33 +30,37 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3">
+    <form onSubmit={submit} className="space-y-4">
       <div>
-        <label className="block text-sm text-slate-600">Email</label>
+        <label className="field-label">Email</label>
         <input
           type="email"
           required
+          autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 w-full rounded-md border px-3 py-2 text-sm outline-none focus:border-brand"
+          placeholder="you@company.com"
+          className="field-input"
         />
       </div>
       <div>
-        <label className="block text-sm text-slate-600">Password</label>
+        <label className="field-label">Password</label>
         <input
           type="password"
           required
+          autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded-md border px-3 py-2 text-sm outline-none focus:border-brand"
+          placeholder="••••••••"
+          className="field-input"
         />
       </div>
-      {error && <p className="text-sm text-rose-600">{error}</p>}
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
-      >
+      {error && (
+        <p className="rounded-lg border border-danger/25 bg-danger/10 px-3 py-2 text-sm text-danger">
+          {error}
+        </p>
+      )}
+      <button type="submit" disabled={loading} className="btn-primary w-full">
         {loading ? "Signing in…" : "Sign in"}
       </button>
     </form>

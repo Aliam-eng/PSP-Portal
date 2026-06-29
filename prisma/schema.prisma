@@ -87,20 +87,24 @@ model ProviderConfig {
   createPaymentPath String?  @default("/integrations/whish/payments")
   statusPath        String?  @default("/integrations/whish/payments/{id}")
   healthPath        String?  @default("/health")
+  minDeposit        Float    @default(0) // minimum allowed deposit amount
+  webhookSecret     String?  // shared secret to verify incoming Rival webhooks
   enabled           Boolean  @default(false)
   updatedAt         DateTime @updatedAt
 }
 
 model Mt5Config {
   id           String   @id @default("mt5")
-  gatewayUrl   String?  // internal MT5 gateway base URL, e.g. http://localhost:4100
-  gatewayKey   String?  // shared secret (x-api-key) for the gateway
-  defaultGroup String?  // default MT5 group for deposits
-  // MT5 Manager connection — entered in Settings, forwarded to the Python gateway.
+  // MT5 WebAPI connection (entered in Settings; the app talks WebAPI directly).
   // NOTE: store-at-rest only; encrypt these columns before production use.
-  mt5Server    String?  // server address:port, e.g. mt5.broker.com:443
-  mt5Login     String?  // manager login (number)
-  mt5Password  String?  // manager password
+  mt5Server    String?  // WebAPI host:port, e.g. 185.67.127.231:443
+  mt5Login     String?  // WebAPI manager login (number)
+  mt5Password  String?  // WebAPI manager password
+  cryptMethod  String?  @default("NONE") // NONE | AES256OFB (broker dependent)
+  defaultGroup String?  // default MT5 group (optional)
   enabled      Boolean  @default(false)
   updatedAt    DateTime @updatedAt
+  // Deprecated (old HTTP-gateway approach) — kept nullable for back-compat.
+  gatewayUrl   String?
+  gatewayKey   String?
 }

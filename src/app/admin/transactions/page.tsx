@@ -31,14 +31,42 @@ export default async function AdminTransactions() {
     createdAt: t.createdAt.toISOString(),
   }));
 
+  const sum = (pred: (s: string) => boolean) =>
+    rows.filter((r) => pred(r.status)).reduce((a, r) => a + r.amount, 0);
+  const stats = [
+    { label: "Total deposits", value: String(rows.length), tone: "ink" as const },
+    { label: "Credited", value: rows.filter((r) => r.status === "CREDITED").length.toString(), tone: "brand" as const },
+    { label: "Awaiting", value: rows.filter((r) => ["LINK_GENERATED", "PAID"].includes(r.status)).length.toString(), tone: "gold" as const },
+    { label: "Credited volume", value: `$${sum((s) => s === "CREDITED").toFixed(2)}`, tone: "ink" as const },
+  ];
+
   return (
     <>
       <TopBar user={session} />
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Transactions</h1>
+      <main className="mx-auto max-w-6xl px-5 py-8">
+        <div className="animate-fade-up">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Transactions</h1>
+          <p className="mt-1 text-sm text-ink-muted">Monitor and reconcile every deposit.</p>
         </div>
-        <TransactionsTable rows={rows} />
+
+        <div className="mt-6 grid grid-cols-2 gap-3 animate-fade-up sm:grid-cols-4" style={{ animationDelay: "60ms" }}>
+          {stats.map((s) => (
+            <div key={s.label} className="card p-4">
+              <p className="text-xs text-ink-dim">{s.label}</p>
+              <p
+                className={`mt-1 text-2xl font-semibold tracking-tight ${
+                  s.tone === "brand" ? "text-brand-400" : s.tone === "gold" ? "text-gold" : "text-ink"
+                }`}
+              >
+                {s.value}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 animate-fade-up" style={{ animationDelay: "120ms" }}>
+          <TransactionsTable rows={rows} />
+        </div>
       </main>
     </>
   );

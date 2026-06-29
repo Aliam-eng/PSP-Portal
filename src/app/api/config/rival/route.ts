@@ -9,6 +9,8 @@ const schema = z.object({
   createPaymentPath: z.string().optional().nullable(),
   statusPath: z.string().optional().nullable(),
   healthPath: z.string().optional().nullable(),
+  minDeposit: z.coerce.number().min(0).max(1_000_000).optional(),
+  webhookSecret: z.string().optional().nullable(),
   enabled: z.boolean().optional(),
 });
 
@@ -27,9 +29,11 @@ export async function PUT(req: Request) {
     createPaymentPath: d.createPaymentPath ?? undefined,
     statusPath: d.statusPath ?? undefined,
     healthPath: d.healthPath ?? undefined,
+    minDeposit: d.minDeposit ?? undefined,
     enabled: d.enabled ?? undefined,
   };
   if (d.apiKey) data.apiKey = d.apiKey;
+  if (d.webhookSecret) data.webhookSecret = d.webhookSecret;
 
   const cfg = await prisma.providerConfig.upsert({
     where: { id: "rival" },
@@ -37,5 +41,11 @@ export async function PUT(req: Request) {
     create: { id: "rival", ...data, apiKey: d.apiKey ?? null },
   });
 
-  return NextResponse.json({ ok: true, hasKey: !!cfg.apiKey, enabled: cfg.enabled });
+  return NextResponse.json({
+    ok: true,
+    hasKey: !!cfg.apiKey,
+    hasWebhookSecret: !!cfg.webhookSecret,
+    enabled: cfg.enabled,
+    minDeposit: cfg.minDeposit,
+  });
 }

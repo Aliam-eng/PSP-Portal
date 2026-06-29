@@ -24,6 +24,16 @@ export async function POST(req: Request) {
   }
   const { mt5Login, amount, currency, email, name } = parsed.data;
 
+  // Enforce the admin-configured minimum deposit server-side.
+  const cfg = await prisma.providerConfig.findUnique({ where: { id: "rival" }, select: { minDeposit: true } });
+  const minDeposit = cfg?.minDeposit ?? 0;
+  if (minDeposit > 0 && amount < minDeposit) {
+    return NextResponse.json(
+      { error: `Minimum deposit is ${minDeposit.toFixed(2)} ${currency.toUpperCase()}` },
+      { status: 400 }
+    );
+  }
+
   const reference = `PSP-${randomUUID().slice(0, 8).toUpperCase()}`;
   const base = process.env.APP_BASE_URL || "http://localhost:3000";
 

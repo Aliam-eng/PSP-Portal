@@ -18,8 +18,11 @@ export default async function SettingsPage() {
   return (
     <>
       <TopBar user={session} />
-      <main className="mx-auto max-w-3xl space-y-8 px-4 py-8">
-        <h1 className="text-xl font-semibold">Settings</h1>
+      <main className="mx-auto max-w-3xl space-y-6 px-5 py-8">
+        <div className="animate-fade-up">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Settings</h1>
+          <p className="mt-1 text-sm text-ink-muted">Provider keys, MT5 connection, and your account.</p>
+        </div>
         <ChangePassword email={session.email} />
         <SettingsForms
           rival={{
@@ -27,16 +30,18 @@ export default async function SettingsPage() {
             createPaymentPath: rival?.createPaymentPath ?? "",
             statusPath: rival?.statusPath ?? "",
             healthPath: rival?.healthPath ?? "",
+            minDeposit: rival?.minDeposit ?? 0,
             enabled: rival?.enabled ?? false,
             hasKey: !!rival?.apiKey,
+            hasWebhookSecret: !!rival?.webhookSecret,
+            webhookUrl: `${process.env.APP_BASE_URL || "http://localhost:3000"}/api/webhooks/rival`,
           }}
           mt5={{
-            gatewayUrl: mt5?.gatewayUrl ?? "",
-            defaultGroup: mt5?.defaultGroup ?? "",
             mt5Server: mt5?.mt5Server ?? "",
             mt5Login: mt5?.mt5Login ?? "",
+            cryptMethod: (mt5?.cryptMethod as "NONE" | "AES256OFB") ?? "NONE",
+            defaultGroup: mt5?.defaultGroup ?? "",
             enabled: mt5?.enabled ?? false,
-            hasKey: !!mt5?.gatewayKey,
             hasPassword: !!mt5?.mt5Password,
           }}
         />

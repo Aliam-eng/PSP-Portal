@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = join(__dirname, "..", "public");
 mkdirSync(OUT, { recursive: true });
 
-const BG = [0x1f, 0x6f, 0xeb]; // brand #1f6feb
+const BG = [0x00, 0xa6, 0x3e]; // giv.trade brand green
 const FG = [255, 255, 255];
 
 // 5x7 glyphs for the letters we need.

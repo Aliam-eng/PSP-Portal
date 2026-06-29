@@ -59,12 +59,37 @@ Then in **/admin/settings**:
 - Rival: paste your company key (`tsk_...`), tick *Enabled*, Save.
 - MT5: set gateway URL/key + **MT5 server, manager login, password**, tick *Enabled*, *Test connection*.
 
-## Deploy with Docker
+## Deploy to a server (one command)
 
-Full stack (Postgres + app) via Compose:
+On a fresh Linux server with **Docker** + **Docker Compose v2**:
 
 ```bash
-# set a real secret + initial admin password first
+git clone <this-repo> psp-portal && cd psp-portal
+./deploy.sh portal.giv.trade ops@giv.trade      # <domain> [acme-email]
+```
+
+[deploy.sh](deploy.sh) generates secrets (preserved on re-deploys), writes `.env`, then brings
+up **Postgres + app + Caddy** via [docker-compose.prod.yml](docker-compose.prod.yml). **Caddy
+issues a real Let's Encrypt TLS cert automatically** for the domain, so the site is HTTPS
+(required for the PWA and Rival webhooks). It runs `prisma migrate deploy`, seeds the initial
+admin, and prints the admin login + password.
+
+Before/after running it:
+1. Point a **DNS A record**: `your-domain → server public IP`.
+2. Open ports **80 and 443** in the firewall.
+3. In **MT5 Administrator**, whitelist **this server's public IP** for the WebAPI manager.
+4. Log in at `https://<domain>/login`, go to **Settings**, set the Rival key, MT5 WebAPI
+   host/login/password, min deposit, and (optionally) the webhook secret + register the
+   webhook URL shown there.
+
+Re-deploy after changes: `git pull && ./deploy.sh <domain>`. Logs:
+`docker compose -f docker-compose.prod.yml logs -f`.
+
+## Local Docker (no TLS)
+
+Postgres + app on localhost:
+
+```bash
 export AUTH_SECRET="$(openssl rand -hex 32)"
 export ADMIN_PASSWORD="a-strong-password"
 docker compose up -d --build

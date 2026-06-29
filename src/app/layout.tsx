@@ -1,6 +1,14 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { RegisterSW } from "@/components/RegisterSW";
+
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans",
+  weight: ["400", "500", "600", "700", "800"],
+});
 
 export const metadata: Metadata = {
   title: "PSP Portal",
@@ -16,13 +24,13 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "PSP Portal",
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
   },
   formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1f6feb",
+  themeColor: "#03100f",
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
@@ -30,8 +38,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen">
+    <html lang="en" className={jakarta.variable}>
+      <body className="min-h-screen font-sans">
         {children}
         <RegisterSW />
       </body>
