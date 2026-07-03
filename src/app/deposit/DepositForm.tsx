@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-
-const CURRENCIES = ["USD"]; // Whish is USD-only per Rival docs
+import { computeFee, round2 } from "@/lib/fees";
 
 export function DepositForm({ minDeposit = 0 }: { minDeposit?: number }) {
   const [mt5Login, setMt5Login] = useState("");
   const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState("USD");
+  const currency = "USD"; // Whish is USD-only per Rival docs
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -16,6 +15,11 @@ export function DepositForm({ minDeposit = 0 }: { minDeposit?: number }) {
   const numeric = parseFloat(amount);
   const belowMin = minDeposit > 0 && amount !== "" && (Number.isNaN(numeric) || numeric < minDeposit);
   const minLabel = `Minimum deposit is ${minDeposit.toFixed(2)} ${currency}`;
+
+  // Fee (0 for now) and total the client pays. See src/lib/fees.ts.
+  const validAmount = !Number.isNaN(numeric) && numeric > 0 && !belowMin;
+  const fee = validAmount ? computeFee(numeric) : 0;
+  const total = validAmount ? round2(numeric + fee) : 0;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,7 +44,7 @@ export function DepositForm({ minDeposit = 0 }: { minDeposit?: number }) {
   }
 
   return (
-    <form onSubmit={submit} className="card space-y-5 p-6 sm:p-7">
+    <form onSubmit={submit} className="card space-y-4 p-5 sm:p-6">
       <div>
         <label className="field-label">MT5 account number</label>
         <input
@@ -51,48 +55,31 @@ export function DepositForm({ minDeposit = 0 }: { minDeposit?: number }) {
           placeholder="e.g. 5000123"
           className="field-input font-mono tracking-wide"
         />
-        <span className="field-hint">Funds will be credited to this MT5 login.</span>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="field-label">Amount</label>
-          <div className="relative">
-            <input
-              type="number"
-              min={minDeposit > 0 ? minDeposit : 0.01}
-              step="0.01"
-              required
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder={minDeposit > 0 ? minDeposit.toFixed(2) : "25.00"}
-              aria-invalid={belowMin}
-              className={`field-input pr-14 font-mono ${belowMin ? "border-danger/60 focus:border-danger/60" : ""}`}
-            />
-            <span className="pointer-events-none absolute inset-y-0 right-3.5 flex items-center text-xs font-medium text-ink-dim">
-              {currency}
-            </span>
-          </div>
-          {belowMin ? (
-            <span className="mt-1.5 block text-xs text-danger">{minLabel}</span>
-          ) : minDeposit > 0 ? (
-            <span className="field-hint">Minimum {minDeposit.toFixed(2)} {currency}</span>
-          ) : null}
+      <div>
+        <label className="field-label">Amount</label>
+        <div className="relative">
+          <input
+            type="number"
+            min={minDeposit > 0 ? minDeposit : 0.01}
+            step="0.01"
+            required
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder={minDeposit > 0 ? minDeposit.toFixed(2) : "25.00"}
+            aria-invalid={belowMin}
+            className={`field-input pr-14 font-mono ${belowMin ? "border-danger/60 focus:border-danger/60" : ""}`}
+          />
+          <span className="pointer-events-none absolute inset-y-0 right-3.5 flex items-center text-xs font-medium text-ink-dim">
+            {currency}
+          </span>
         </div>
-        <div>
-          <label className="field-label">Currency</label>
-          <select
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            className="field-input appearance-none"
-          >
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c} className="bg-surface text-ink">
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
+        {belowMin ? (
+          <span className="mt-1.5 block text-xs text-danger">{minLabel}</span>
+        ) : minDeposit > 0 ? (
+          <span className="field-hint">Minimum {minDeposit.toFixed(2)} {currency}</span>
+        ) : null}
       </div>
 
       <div>
@@ -106,6 +93,18 @@ export function DepositForm({ minDeposit = 0 }: { minDeposit?: number }) {
           placeholder="you@example.com"
           className="field-input"
         />
+      </div>
+
+      {/* Fee breakdown */}
+      <div className="space-y-1.5 rounded-xl border border-line bg-surface-raised/40 px-4 py-2.5 text-sm">
+        <div className="flex items-center justify-between text-ink-muted">
+          <span>Fee</span>
+          <span className="font-mono text-ink">{fee.toFixed(2)} {currency}</span>
+        </div>
+        <div className="flex items-center justify-between border-t border-line/70 pt-2 font-medium">
+          <span className="text-ink">Total to pay</span>
+          <span className="font-mono text-brand-400">{total.toFixed(2)} {currency}</span>
+        </div>
       </div>
 
       {error && (

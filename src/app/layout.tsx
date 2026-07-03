@@ -11,9 +11,9 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "PSP Portal",
-  description: "Deposit portal — Rival / Whish Pay + MT5",
-  applicationName: "PSP Portal",
+  title: "GivTrade",
+  description: "Fund your MT5 account securely via Whish Pay",
+  applicationName: "GivTrade",
   icons: {
     icon: [
       { url: "/favicon.png", sizes: "32x32", type: "image/png" },
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "PSP Portal",
+    title: "GivTrade",
     statusBarStyle: "black-translucent",
   },
   formatDetection: { telephone: false },

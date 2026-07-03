@@ -11,39 +11,24 @@ export default async function DepositPage() {
   return (
     <>
       <PublicHeader />
-      <main className="mx-auto max-w-xl px-5 py-12 sm:py-16">
+      <main className="mx-auto max-w-md px-5 py-6 sm:py-8">
         <div className="animate-fade-up">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-raised/40 px-3 py-1 text-xs font-medium text-ink-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-neon" />
-            Instant MT5 funding
-          </span>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            Make a deposit
-          </h1>
-          <p className="mt-3 max-w-md text-[15px] leading-relaxed text-ink-muted">
-            Enter your MT5 account and amount. You&apos;ll pay securely via Whish Pay, and funds are
-            credited to your trading account automatically once confirmed.
+          <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Make a deposit</h1>
+          <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+            Fund your MT5 account securely via <span className="font-semibold text-danger">Whish Pay</span>. You&apos;ll
+            receive a code from Whish to confirm, and funds are credited automatically once confirmed.
+          </p>
+          <p className="mt-2 flex items-start gap-1.5 text-sm font-medium leading-relaxed text-brand-400">
+            <svg className="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m5 13 4 4L19 7" />
+            </svg>
+            Make sure to enter your correct account number before confirming.
           </p>
         </div>
 
-        <div className="mt-8 animate-fade-up" style={{ animationDelay: "60ms" }}>
+        <div className="mt-5 animate-fade-up" style={{ animationDelay: "60ms" }}>
           <DepositForm minDeposit={minDeposit} />
         </div>
-
-        <ol className="mt-8 grid grid-cols-3 gap-3 animate-fade-up" style={{ animationDelay: "120ms" }}>
-          {[
-            { n: "1", t: "Enter details" },
-            { n: "2", t: "Pay on Whish" },
-            { n: "3", t: "Auto-credited" },
-          ].map((s) => (
-            <li key={s.n} className="rounded-xl border border-line bg-surface/50 px-3 py-3 text-center">
-              <div className="mx-auto grid h-6 w-6 place-items-center rounded-full border border-brand/30 bg-brand/10 text-xs font-semibold text-brand-400">
-                {s.n}
-              </div>
-              <p className="mt-2 text-xs text-ink-muted">{s.t}</p>
-            </li>
-          ))}
-        </ol>
       </main>
     </>
   );

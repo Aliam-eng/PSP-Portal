@@ -55,7 +55,8 @@ model Transaction {
   clientEmail     String?
   clientName      String?
 
-  amount          Float
+  amount          Float          // deposit amount credited to MT5
+  fee             Float          @default(0) // fee added on top; client pays amount + fee
   currency        String         @default("USD")
   status          String         @default("PENDING")
 

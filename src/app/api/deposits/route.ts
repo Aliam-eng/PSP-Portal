@@ -3,6 +3,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { createPayment, RivalError } from "@/lib/rival";
+import { computeFee, computeTotal } from "@/lib/fees";
 
 // Public (no-login) deposit creation. The client enters their MT5 account
 // number and amount; we create a Whish Pay link and return it.
@@ -34,6 +35,10 @@ export async function POST(req: Request) {
     );
   }
 
+  // Fee is added on top: client pays (amount + fee); MT5 is credited `amount`.
+  const fee = computeFee(amount);
+  const total = computeTotal(amount);
+
   const reference = `PSP-${randomUUID().slice(0, 8).toUpperCase()}`;
   const base = process.env.APP_BASE_URL || "http://localhost:3000";
 
@@ -44,6 +49,7 @@ export async function POST(req: Request) {
       clientEmail: email,
       clientName: name,
       amount,
+      fee,
       currency: currency.toUpperCase(),
       reference,
       status: "PENDING",
@@ -52,7 +58,7 @@ export async function POST(req: Request) {
 
   try {
     const payment = await createPayment({
-      amount,
+      amount: total, // client pays deposit + fee
       currency: currency.toUpperCase(),
       invoice: `${reference} • MT5 ${mt5Login}`,
       idempotencyKey: reference,

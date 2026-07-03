@@ -4,9 +4,9 @@ import type { MetadataRoute } from "next";
 // Next serves this at /manifest.webmanifest and links it automatically.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "PSP Portal",
-    short_name: "PSP",
-    description: "Deposit portal — Whish Pay + MT5",
+    name: "GivTrade",
+    short_name: "GivTrade",
+    description: "Fund your MT5 account securely via Whish Pay",
     start_url: "/",
     scope: "/",
     display: "standalone",
