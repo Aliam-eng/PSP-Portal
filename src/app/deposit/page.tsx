@@ -22,7 +22,7 @@ export default async function DepositPage() {
             <svg className="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="m5 13 4 4L19 7" />
             </svg>
-            Make sure to enter your correct account number before confirming.
+            Make sure to fill in your account number correctly before proceeding.
           </p>
         </div>
 
