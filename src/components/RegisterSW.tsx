@@ -14,6 +14,15 @@ export function RegisterSW() {
       return;
     }
 
+    // When the new (pass-through) SW takes control, reload once so any device
+    // that had stale cached chunks picks up fresh assets automatically.
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+
     navigator.serviceWorker.register("/sw.js").catch(() => {
       /* best-effort */
     });
