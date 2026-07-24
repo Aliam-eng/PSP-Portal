@@ -20,6 +20,7 @@ type ScanResult = {
   duplicates: DuplicateRow[];
   totalExtraAmount: number;
   errors: Record<string, string>;
+  elapsedMs: number;
   detail?: string;
 };
 
@@ -89,6 +90,9 @@ export function ScanClient() {
 
       {result && result.ok && (
         <>
+          <p className="text-xs text-ink-dim">
+            Scanned {result.accounts} account(s) in {(result.elapsedMs / 1000).toFixed(1)}s.
+          </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               { label: "Deposits scanned", value: String(result.scannedTx), tone: "ink" },

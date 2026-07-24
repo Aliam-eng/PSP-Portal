@@ -276,15 +276,18 @@ export async function webapiFindDeal(
   }
 }
 
-// Fetch ALL deals for a login by paging (DEAL_GET_PAGE returns ~100 at a time).
+// Fetch deals for a login within a time window, paging (DEAL_GET_PAGE returns
+// ~100 at a time). A tight window keeps the load on MT5 small and fast.
 async function fetchAllDeals(
   conn: WebApiConnection,
   login: string,
+  fromSec?: number,
+  toSec?: number,
   maxPages = 200
 ): Promise<{ retcode: string; deals: any[] }> {
   const now = Math.floor(Date.now() / 1000);
-  const from = now - 5 * 365 * 24 * 3600; // wide window
-  const to = now + 24 * 3600;
+  const from = fromSec ?? now - 5 * 365 * 24 * 3600;
+  const to = toSec ?? now + 24 * 3600;
   const PAGE = 100;
   const all: any[] = [];
   let offset = 0;
@@ -327,43 +330,60 @@ export async function webapiDealsRaw(
 }
 
 export type BalanceDeal = { deal: string; comment: string };
+export type ScanItem = { login: string; from: number; to: number }; // window in unix seconds
 
-// Fetch all balance deals (Action=2) for many logins over one connection.
-// Used by the reconciliation scan to detect duplicate credits.
+// Fetch balance deals (Action=2) for many accounts, each within its own tight
+// time window. Uses a few parallel connections to stay quick while keeping load
+// on MT5 modest. Read-only.
 export async function webapiBalanceDeals(
   cfg: WebApiConfig,
-  logins: string[]
+  items: ScanItem[],
+  concurrency = 3
 ): Promise<{ ok: boolean; byLogin: Record<string, BalanceDeal[]>; errors: Record<string, string>; detail?: string }> {
   const byLogin: Record<string, BalanceDeal[]> = {};
   const errors: Record<string, string> = {};
   if (!cfg.server || !cfg.login || !cfg.password) return { ok: false, byLogin, errors, detail: "MT5 not configured" };
   const { host, port } = parseHostPort(cfg.server);
-  let conn: WebApiConnection | null = null;
-  try {
-    conn = await connect(host, port);
-    await authenticate(conn, cfg);
-    for (const login of logins) {
-      try {
-        const { retcode, deals } = await fetchAllDeals(conn, login);
-        if (deals.length === 0 && retcode && !retcode.startsWith("0")) {
-          errors[login] = retcode;
-          byLogin[login] = [];
-          continue;
+
+  const queue = [...items];
+  let connError: string | null = null;
+
+  async function worker() {
+    let conn: WebApiConnection | null = null;
+    try {
+      conn = await connect(host, port);
+      await authenticate(conn, cfg);
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const item = queue.shift();
+        if (!item) break;
+        try {
+          const { retcode, deals } = await fetchAllDeals(conn, item.login, item.from, item.to);
+          if (deals.length === 0 && retcode && !retcode.startsWith("0")) {
+            errors[item.login] = retcode;
+            byLogin[item.login] = [];
+            continue;
+          }
+          byLogin[item.login] = deals
+            .filter((d) => Number(d?.Action) === 2)
+            .map((d) => ({ deal: String(d.Deal ?? ""), comment: String(d.Comment ?? "") }));
+        } catch (e: any) {
+          errors[item.login] = e?.message || "query failed";
+          byLogin[item.login] = [];
         }
-        byLogin[login] = deals
-          .filter((d) => Number(d?.Action) === 2)
-          .map((d) => ({ deal: String(d.Deal ?? ""), comment: String(d.Comment ?? "") }));
-      } catch (e: any) {
-        errors[login] = e?.message || "query failed";
-        byLogin[login] = [];
       }
+    } catch (e: any) {
+      connError = e?.message || "connection failed";
+    } finally {
+      conn?.close();
     }
-    return { ok: true, byLogin, errors };
-  } catch (e: any) {
-    return { ok: false, byLogin, errors, detail: e?.message || "connection failed" };
-  } finally {
-    conn?.close();
   }
+
+  const workers = Math.max(1, Math.min(concurrency, items.length || 1));
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+
+  if (Object.keys(byLogin).length === 0 && connError) return { ok: false, byLogin, errors, detail: connError };
+  return { ok: true, byLogin, errors };
 }
 
 export type WebApiDepositInput = WebApiConfig & {
@@ -377,7 +397,10 @@ export type WebApiDepositInput = WebApiConfig & {
 // comment. Returns the deal ticket if found (i.e. this deposit was already
 // credited), else null. Best-effort: returns null on any query problem.
 async function findExistingDeal(conn: WebApiConnection, login: string, reference: string): Promise<string | null> {
-  const { deals } = await fetchAllDeals(conn, login);
+  // Tight window: a prior credit for THIS deposit would be very recent, so we
+  // only look back a couple of days — one small, fast query, gentle on MT5.
+  const now = Math.floor(Date.now() / 1000);
+  const { deals } = await fetchAllDeals(conn, login, now - 2 * 24 * 3600, now + 24 * 3600);
   const match = deals.find(
     (d) => d && typeof d.Comment === "string" && d.Comment.includes(reference) && Number(d.Action) === 2
   );
@@ -390,7 +413,7 @@ async function findExistingDeal(conn: WebApiConnection, login: string, reference
 // credited twice. TYPE=2 is DEAL_BALANCE (deposit when amount is positive).
 export async function webapiDeposit(
   input: WebApiDepositInput
-): Promise<{ ok: true; dealId: string; existing?: boolean } | { ok: false; message: string }> {
+): Promise<{ ok: true; dealId: string; existing?: boolean; checkMs?: number } | { ok: false; message: string }> {
   if (!input.server || !input.login || !input.password) return { ok: false, message: "WebAPI connection not configured" };
   const { host, port } = parseHostPort(input.server);
   let conn: WebApiConnection | null = null;
@@ -398,9 +421,13 @@ export async function webapiDeposit(
     conn = await connect(host, port);
     await authenticate(conn, input);
 
-    // Idempotency guard: already credited?
+    // Idempotency guard: already credited? (timed so we can see how long the
+    // duplicate-check adds to each deposit)
+    const t0 = Date.now();
     const existing = await findExistingDeal(conn, input.clientLogin, input.reference);
-    if (existing) return { ok: true, dealId: existing, existing: true };
+    const checkMs = Date.now() - t0;
+    console.log(`[mt5] ${input.reference} dup-check ${checkMs}ms -> ${existing ? "already credited " + existing : "not credited"}`);
+    if (existing) return { ok: true, dealId: existing, existing: true, checkMs };
 
     const res = await conn.command("TRADE_BALANCE", {
       LOGIN: input.clientLogin,
@@ -410,7 +437,7 @@ export async function webapiDeposit(
       CHECK_MARGIN: "0",
     });
     if (res.retcode !== 0) return { ok: false, message: `TRADE_BALANCE failed: ${res.rettext || "error"}` };
-    return { ok: true, dealId: String(res.params.TICKET || ""), existing: false };
+    return { ok: true, dealId: String(res.params.TICKET || ""), existing: false, checkMs };
   } catch (e: any) {
     return { ok: false, message: e?.message || "WebAPI deposit failed" };
   } finally {

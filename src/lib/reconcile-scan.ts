@@ -21,15 +21,17 @@ export type ScanResult = {
   duplicates: DuplicateRow[];
   totalExtraAmount: number;
   errors: Record<string, string>; // per-login MT5 query errors
+  elapsedMs: number;
   detail?: string;
 };
 
 // Read-only: for every credited deposit, ask MT5 how many balance deals carry
 // its reference. 2+ = a duplicate credit. Nothing is modified in MT5.
 export async function scanDuplicateCredits(): Promise<ScanResult> {
+  const started = Date.now();
   const cfg = await prisma.mt5Config.findUnique({ where: { id: "mt5" } });
   if (!cfg?.mt5Server || !cfg?.mt5Login || !cfg?.mt5Password) {
-    return { ok: false, scannedTx: 0, accounts: 0, duplicates: [], totalExtraAmount: 0, errors: {}, detail: "MT5 WebAPI not configured" };
+    return { ok: false, scannedTx: 0, accounts: 0, duplicates: [], totalExtraAmount: 0, errors: {}, elapsedMs: 0, detail: "MT5 WebAPI not configured" };
   }
 
   const txns = await prisma.transaction.findMany({
@@ -38,13 +40,27 @@ export async function scanDuplicateCredits(): Promise<ScanResult> {
     orderBy: { createdAt: "desc" },
   });
 
-  const logins = [...new Set(txns.map((t) => t.mt5Login))];
+  // Only query the accounts we deposited to, each within a tight window derived
+  // from that account's own deposit dates (± a few days) — light on MT5.
+  const BUFFER = 3 * 24 * 3600; // seconds
+  const windows = new Map<string, { min: number; max: number }>();
+  for (const t of txns) {
+    const s = Math.floor(t.createdAt.getTime() / 1000);
+    const w = windows.get(t.mt5Login);
+    if (!w) windows.set(t.mt5Login, { min: s, max: s });
+    else {
+      if (s < w.min) w.min = s;
+      if (s > w.max) w.max = s;
+    }
+  }
+  const items = [...windows.entries()].map(([login, w]) => ({ login, from: w.min - BUFFER, to: w.max + BUFFER }));
+
   const { ok, byLogin, errors, detail } = await webapiBalanceDeals(
     { server: cfg.mt5Server, login: cfg.mt5Login, password: cfg.mt5Password, cryptMethod: cfg.cryptMethod },
-    logins
+    items
   );
   if (!ok) {
-    return { ok: false, scannedTx: txns.length, accounts: logins.length, duplicates: [], totalExtraAmount: 0, errors, detail };
+    return { ok: false, scannedTx: txns.length, accounts: items.length, duplicates: [], totalExtraAmount: 0, errors, elapsedMs: Date.now() - started, detail };
   }
 
   const duplicates: DuplicateRow[] = [];
@@ -70,5 +86,5 @@ export async function scanDuplicateCredits(): Promise<ScanResult> {
     }
   }
 
-  return { ok: true, scannedTx: txns.length, accounts: logins.length, duplicates, totalExtraAmount: totalExtra, errors };
+  return { ok: true, scannedTx: txns.length, accounts: items.length, duplicates, totalExtraAmount: totalExtra, errors, elapsedMs: Date.now() - started };
 }
