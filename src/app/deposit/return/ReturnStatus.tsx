@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui";
 
@@ -18,14 +18,21 @@ export function ReturnStatus(props: {
   const [deal, setDeal] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [polling, setPolling] = useState(true);
+  const inFlight = useRef(false);
 
   const sync = useCallback(async () => {
-    const res = await fetch(`/api/deposits/${props.txId}/sync`, { method: "POST" });
-    const data = await res.json().catch(() => ({}));
-    if (data.status) setStatus(data.status);
-    if (data.mt5DealId) setDeal(data.mt5DealId);
-    if (data.errorMessage) setErr(data.errorMessage);
-    if (data.status && TERMINAL.includes(data.status)) setPolling(false);
+    if (inFlight.current) return; // don't overlap requests
+    inFlight.current = true;
+    try {
+      const res = await fetch(`/api/deposits/${props.txId}/sync`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (data.status) setStatus(data.status);
+      if (data.mt5DealId) setDeal(data.mt5DealId);
+      if (data.errorMessage) setErr(data.errorMessage);
+      if (data.status && TERMINAL.includes(data.status)) setPolling(false);
+    } finally {
+      inFlight.current = false;
+    }
   }, [props.txId]);
 
   useEffect(() => {

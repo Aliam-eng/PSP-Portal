@@ -70,6 +70,9 @@ model Transaction {
   // MT5 result
   mt5DealId       String?
   mt5Message      String?
+  // Concurrency lock: set while an MT5 credit is in progress so concurrent
+  // polls/sweeps can't double-credit. Cleared when the credit settles.
+  creditingAt     DateTime?
 
   // Free-form audit of provider payloads
   providerPayload String?        // JSON string of last provider/webhook payload

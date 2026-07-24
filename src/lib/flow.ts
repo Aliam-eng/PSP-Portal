@@ -51,31 +51,53 @@ export async function reconcileTransaction(txId: string): Promise<Transaction | 
     });
   }
 
-  // 3) Credit MT5 (idempotent — only when we don't yet have a deal id).
-  if (!tx.mt5DealId) {
-    const result = await mt5Deposit({
-      login: tx.mt5Login,
-      amount: tx.amount,
-      currency: tx.currency,
-      group: null, // public deposits use the gateway's default MT5 group
-      comment: `Deposit ${tx.reference}`,
-      reference: tx.reference,
-    });
+  // 3) Credit MT5 — exactly once. Atomically CLAIM the credit so concurrent
+  //    polls/sweeps can't each send a TRADE_BALANCE (which caused multi-credit).
+  //    updateMany is a single row-locked UPDATE: only one caller gets count===1.
+  //    A lock left by a crashed attempt is reclaimed after LOCK_STALE_MS.
+  const LOCK_STALE_MS = 3 * 60 * 1000;
+  const staleBefore = new Date(Date.now() - LOCK_STALE_MS);
+  const claim = await prisma.transaction.updateMany({
+    where: {
+      id: tx.id,
+      mt5DealId: null, // never re-credit once a deal id exists
+      status: { in: ["PAID", "CREDIT_FAILED"] },
+      OR: [{ creditingAt: null }, { creditingAt: { lt: staleBefore } }],
+    },
+    data: { creditingAt: new Date() },
+  });
 
-    if (result.ok) {
-      return prisma.transaction.update({
-        where: { id: tx.id },
-        data: { status: "CREDITED", mt5DealId: result.dealId, mt5Message: result.message ?? null, errorMessage: null },
-        include: { account: true },
-      });
-    }
-    return prisma.transaction.update({
-      where: { id: tx.id },
-      data: { status: "CREDIT_FAILED", mt5Message: result.message, errorMessage: result.message },
-    });
+  if (claim.count === 0) {
+    // Already credited, or another request holds the lock right now — do nothing.
+    return prisma.transaction.findUnique({ where: { id: tx.id } });
   }
 
-  return prisma.transaction.findUnique({ where: { id: tx.id } });
+  // We exclusively own the credit for this transaction.
+  const result = await mt5Deposit({
+    login: tx.mt5Login,
+    amount: tx.amount,
+    currency: tx.currency,
+    group: null, // public deposits use the default MT5 group
+    comment: `Deposit ${tx.reference}`,
+    reference: tx.reference,
+  });
+
+  if (result.ok) {
+    return prisma.transaction.update({
+      where: { id: tx.id },
+      data: {
+        status: "CREDITED",
+        mt5DealId: result.dealId,
+        mt5Message: result.message ?? null,
+        errorMessage: null,
+        creditingAt: null,
+      },
+    });
+  }
+  return prisma.transaction.update({
+    where: { id: tx.id },
+    data: { status: "CREDIT_FAILED", mt5Message: result.message, errorMessage: result.message, creditingAt: null },
+  });
 }
 
 // Sweep all non-terminal transactions (used by the poller endpoint).
