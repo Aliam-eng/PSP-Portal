@@ -37,6 +37,7 @@ export async function mt5Deposit(input: Mt5DepositInput): Promise<Mt5DepositResu
     clientLogin: input.login,
     amount: input.amount,
     comment: input.comment,
+    reference: input.reference,
   });
   if (result.ok) return { ok: true, dealId: result.dealId, message: "balance operation accepted" };
   return { ok: false, message: result.message };

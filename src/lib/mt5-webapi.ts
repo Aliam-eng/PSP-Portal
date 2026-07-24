@@ -50,7 +50,7 @@ function hex4(n: number): string {
   return (n & 0xffff).toString(16).padStart(4, "0");
 }
 
-type Parsed = { command: string; params: Record<string, string>; retcode: number; rettext: string };
+type Parsed = { command: string; params: Record<string, string>; retcode: number; rettext: string; json: string };
 
 function parseAnswer(answer: string): Parsed {
   const bar = answer.indexOf("|");
@@ -66,7 +66,10 @@ function parseAnswer(answer: string): Parsed {
   }
   const rc = params.RETCODE || "";
   const retcode = parseInt(rc.split(" ")[0] || "-1", 10);
-  return { command, params, retcode, rettext: rc };
+  // Some commands (DEAL_GET_PAGE, USER_GET, ...) append a JSON body after CRLF.
+  const nl = answer.indexOf("\n");
+  const json = nl >= 0 ? answer.slice(nl + 1).trim() : "";
+  return { command, params, retcode, rettext: rc, json };
 }
 
 class WebApiConnection {
@@ -249,22 +252,144 @@ export async function webapiUserGet(cfg: WebApiConfig & { clientLogin: string })
   }
 }
 
+// Read-only: fetch recent deals for a login and (optionally) look for one whose
+// comment carries `reference`. Used by the idempotency guard and for diagnostics.
+export async function webapiFindDeal(
+  cfg: WebApiConfig & { clientLogin: string; reference?: string }
+): Promise<{ ok: boolean; retcode: string; parseOk: boolean; count: number; dealId: string | null; detail?: string }> {
+  const { host, port } = parseHostPort(cfg.server);
+  let conn: WebApiConnection | null = null;
+  try {
+    conn = await connect(host, port);
+    await authenticate(conn, cfg);
+    const now = Math.floor(Date.now() / 1000);
+    const res = await conn.command("DEAL_GET_PAGE", {
+      LOGIN: cfg.clientLogin,
+      FROM: now - 30 * 24 * 3600,
+      TO: now + 24 * 3600,
+      OFFSET: 0,
+      TOTAL: 500,
+    });
+    let count = 0,
+      parseOk = false,
+      dealId: string | null = null;
+    try {
+      const parsed = JSON.parse(res.json || "[]");
+      const arr: any[] = Array.isArray(parsed) ? parsed : parsed?.deals || parsed?.data || [];
+      parseOk = true;
+      count = arr.length;
+      if (cfg.reference) {
+        const m = arr.find((d) => d && typeof d.Comment === "string" && d.Comment.includes(cfg.reference!) && Number(d.Action) === 2);
+        dealId = m ? String(m.Deal ?? "") : null;
+      }
+    } catch {
+      /* leave parseOk false */
+    }
+    return { ok: res.retcode === 0, retcode: res.rettext, parseOk, count, dealId };
+  } catch (e: any) {
+    return { ok: false, retcode: "", parseOk: false, count: 0, dealId: null, detail: e?.message };
+  } finally {
+    conn?.close();
+  }
+}
+
+export type BalanceDeal = { deal: string; comment: string };
+
+// Fetch all balance deals (Action=2) for many logins over one connection.
+// Used by the reconciliation scan to detect duplicate credits.
+export async function webapiBalanceDeals(
+  cfg: WebApiConfig,
+  logins: string[]
+): Promise<{ ok: boolean; byLogin: Record<string, BalanceDeal[]>; errors: Record<string, string>; detail?: string }> {
+  const byLogin: Record<string, BalanceDeal[]> = {};
+  const errors: Record<string, string> = {};
+  if (!cfg.server || !cfg.login || !cfg.password) return { ok: false, byLogin, errors, detail: "MT5 not configured" };
+  const { host, port } = parseHostPort(cfg.server);
+  let conn: WebApiConnection | null = null;
+  try {
+    conn = await connect(host, port);
+    await authenticate(conn, cfg);
+    const now = Math.floor(Date.now() / 1000);
+    const from = now - 365 * 24 * 3600;
+    const to = now + 24 * 3600;
+    for (const login of logins) {
+      try {
+        const res = await conn.command("DEAL_GET_PAGE", { LOGIN: login, FROM: from, TO: to, OFFSET: 0, TOTAL: 1000 });
+        if (res.retcode !== 0) {
+          errors[login] = res.rettext || "error";
+          byLogin[login] = [];
+          continue;
+        }
+        let arr: any[] = [];
+        try {
+          const p = JSON.parse(res.json || "[]");
+          arr = Array.isArray(p) ? p : p?.deals || p?.data || [];
+        } catch {
+          /* ignore */
+        }
+        byLogin[login] = arr
+          .filter((d) => Number(d?.Action) === 2)
+          .map((d) => ({ deal: String(d.Deal ?? ""), comment: String(d.Comment ?? "") }));
+      } catch (e: any) {
+        errors[login] = e?.message || "query failed";
+        byLogin[login] = [];
+      }
+    }
+    return { ok: true, byLogin, errors };
+  } catch (e: any) {
+    return { ok: false, byLogin, errors, detail: e?.message || "connection failed" };
+  } finally {
+    conn?.close();
+  }
+}
+
 export type WebApiDepositInput = WebApiConfig & {
   clientLogin: string;
   amount: number;
   comment: string;
+  reference: string; // unique tag we match on to avoid double-crediting
 };
 
-// TYPE=2 is DEAL_BALANCE (deposit when amount is positive).
+// Look for an already-existing balance deal carrying our reference in its
+// comment. Returns the deal ticket if found (i.e. this deposit was already
+// credited), else null. Best-effort: returns null on any query problem.
+async function findExistingDeal(conn: WebApiConnection, login: string, reference: string): Promise<string | null> {
+  const now = Math.floor(Date.now() / 1000);
+  const from = now - 30 * 24 * 3600; // last 30 days is plenty for a deposit
+  const to = now + 24 * 3600;
+  const res = await conn.command("DEAL_GET_PAGE", { LOGIN: login, FROM: from, TO: to, OFFSET: 0, TOTAL: 500 });
+  if (res.retcode !== 0 || !res.json) return null;
+  let deals: any;
+  try {
+    deals = JSON.parse(res.json);
+  } catch {
+    return null;
+  }
+  const arr: any[] = Array.isArray(deals) ? deals : deals?.deals || deals?.data || [];
+  const match = arr.find(
+    (d) => d && typeof d.Comment === "string" && d.Comment.includes(reference) && Number(d.Action) === 2
+  );
+  return match ? String(match.Deal ?? "") : null;
+}
+
+// Credit a deposit EXACTLY ONCE. Before sending TRADE_BALANCE we ask MT5 whether
+// a deal for this reference already exists (covers a crash/retry after a prior
+// credit). Combined with the DB-level claim in flow.ts, a deposit can never be
+// credited twice. TYPE=2 is DEAL_BALANCE (deposit when amount is positive).
 export async function webapiDeposit(
   input: WebApiDepositInput
-): Promise<{ ok: true; dealId: string } | { ok: false; message: string }> {
+): Promise<{ ok: true; dealId: string; existing?: boolean } | { ok: false; message: string }> {
   if (!input.server || !input.login || !input.password) return { ok: false, message: "WebAPI connection not configured" };
   const { host, port } = parseHostPort(input.server);
   let conn: WebApiConnection | null = null;
   try {
     conn = await connect(host, port);
     await authenticate(conn, input);
+
+    // Idempotency guard: already credited?
+    const existing = await findExistingDeal(conn, input.clientLogin, input.reference);
+    if (existing) return { ok: true, dealId: existing, existing: true };
+
     const res = await conn.command("TRADE_BALANCE", {
       LOGIN: input.clientLogin,
       TYPE: "2",
@@ -273,7 +398,7 @@ export async function webapiDeposit(
       CHECK_MARGIN: "0",
     });
     if (res.retcode !== 0) return { ok: false, message: `TRADE_BALANCE failed: ${res.rettext || "error"}` };
-    return { ok: true, dealId: String(res.params.TICKET || "") };
+    return { ok: true, dealId: String(res.params.TICKET || ""), existing: false };
   } catch (e: any) {
     return { ok: false, message: e?.message || "WebAPI deposit failed" };
   } finally {

@@ -37,6 +37,7 @@ export function StatusBadge({ status }: { status: string }) {
 export function TopBar({ user }: { user: { email: string; role: string } }) {
   const links = [
     { href: "/admin/transactions", label: "Transactions" },
+    { href: "/admin/reconciliation", label: "Reconciliation" },
     { href: "/admin/settings", label: "Settings" },
   ];
   return (
