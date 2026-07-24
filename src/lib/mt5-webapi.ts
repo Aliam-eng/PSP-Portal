@@ -262,32 +262,65 @@ export async function webapiFindDeal(
   try {
     conn = await connect(host, port);
     await authenticate(conn, cfg);
-    const now = Math.floor(Date.now() / 1000);
-    const res = await conn.command("DEAL_GET_PAGE", {
-      LOGIN: cfg.clientLogin,
-      FROM: now - 30 * 24 * 3600,
-      TO: now + 24 * 3600,
-      OFFSET: 0,
-      TOTAL: 500,
-    });
-    let count = 0,
-      parseOk = false,
-      dealId: string | null = null;
-    try {
-      const parsed = JSON.parse(res.json || "[]");
-      const arr: any[] = Array.isArray(parsed) ? parsed : parsed?.deals || parsed?.data || [];
-      parseOk = true;
-      count = arr.length;
-      if (cfg.reference) {
-        const m = arr.find((d) => d && typeof d.Comment === "string" && d.Comment.includes(cfg.reference!) && Number(d.Action) === 2);
-        dealId = m ? String(m.Deal ?? "") : null;
-      }
-    } catch {
-      /* leave parseOk false */
+    const { retcode, deals } = await fetchAllDeals(conn, cfg.clientLogin);
+    let dealId: string | null = null;
+    if (cfg.reference) {
+      const m = deals.find((d) => d && typeof d.Comment === "string" && d.Comment.includes(cfg.reference!) && Number(d.Action) === 2);
+      dealId = m ? String(m.Deal ?? "") : null;
     }
-    return { ok: res.retcode === 0, retcode: res.rettext, parseOk, count, dealId };
+    return { ok: retcode.startsWith("0"), retcode, parseOk: true, count: deals.length, dealId };
   } catch (e: any) {
     return { ok: false, retcode: "", parseOk: false, count: 0, dealId: null, detail: e?.message };
+  } finally {
+    conn?.close();
+  }
+}
+
+// Fetch ALL deals for a login by paging (DEAL_GET_PAGE returns ~100 at a time).
+async function fetchAllDeals(
+  conn: WebApiConnection,
+  login: string,
+  maxPages = 200
+): Promise<{ retcode: string; deals: any[] }> {
+  const now = Math.floor(Date.now() / 1000);
+  const from = now - 5 * 365 * 24 * 3600; // wide window
+  const to = now + 24 * 3600;
+  const PAGE = 100;
+  const all: any[] = [];
+  let offset = 0;
+  let retcode = "";
+  for (let i = 0; i < maxPages; i++) {
+    const res = await conn.command("DEAL_GET_PAGE", { LOGIN: login, FROM: from, TO: to, OFFSET: offset, TOTAL: PAGE });
+    retcode = res.rettext;
+    if (res.retcode !== 0) break;
+    let arr: any[] = [];
+    try {
+      const p = JSON.parse(res.json || "[]");
+      arr = Array.isArray(p) ? p : p?.deals || p?.data || [];
+    } catch {
+      break;
+    }
+    all.push(...arr);
+    if (arr.length < PAGE) break; // last page
+    offset += arr.length;
+  }
+  return { retcode, deals: all };
+}
+
+// Debug: return raw deals (compact) for a login, paging through all of them.
+export async function webapiDealsRaw(
+  cfg: WebApiConfig & { clientLogin: string }
+): Promise<{ ok: boolean; retcode: string; count: number; sample: any[]; detail?: string }> {
+  const { host, port } = parseHostPort(cfg.server);
+  let conn: WebApiConnection | null = null;
+  try {
+    conn = await connect(host, port);
+    await authenticate(conn, cfg);
+    const { retcode, deals } = await fetchAllDeals(conn, cfg.clientLogin);
+    const sample = deals.map((d) => ({ deal: String(d.Deal ?? ""), action: String(d.Action ?? ""), comment: String(d.Comment ?? ""), profit: String(d.Profit ?? "") }));
+    return { ok: retcode.startsWith("0"), retcode, count: deals.length, sample };
+  } catch (e: any) {
+    return { ok: false, retcode: "", count: 0, sample: [], detail: e?.message };
   } finally {
     conn?.close();
   }
@@ -309,25 +342,15 @@ export async function webapiBalanceDeals(
   try {
     conn = await connect(host, port);
     await authenticate(conn, cfg);
-    const now = Math.floor(Date.now() / 1000);
-    const from = now - 365 * 24 * 3600;
-    const to = now + 24 * 3600;
     for (const login of logins) {
       try {
-        const res = await conn.command("DEAL_GET_PAGE", { LOGIN: login, FROM: from, TO: to, OFFSET: 0, TOTAL: 1000 });
-        if (res.retcode !== 0) {
-          errors[login] = res.rettext || "error";
+        const { retcode, deals } = await fetchAllDeals(conn, login);
+        if (deals.length === 0 && retcode && !retcode.startsWith("0")) {
+          errors[login] = retcode;
           byLogin[login] = [];
           continue;
         }
-        let arr: any[] = [];
-        try {
-          const p = JSON.parse(res.json || "[]");
-          arr = Array.isArray(p) ? p : p?.deals || p?.data || [];
-        } catch {
-          /* ignore */
-        }
-        byLogin[login] = arr
+        byLogin[login] = deals
           .filter((d) => Number(d?.Action) === 2)
           .map((d) => ({ deal: String(d.Deal ?? ""), comment: String(d.Comment ?? "") }));
       } catch (e: any) {
@@ -354,19 +377,8 @@ export type WebApiDepositInput = WebApiConfig & {
 // comment. Returns the deal ticket if found (i.e. this deposit was already
 // credited), else null. Best-effort: returns null on any query problem.
 async function findExistingDeal(conn: WebApiConnection, login: string, reference: string): Promise<string | null> {
-  const now = Math.floor(Date.now() / 1000);
-  const from = now - 30 * 24 * 3600; // last 30 days is plenty for a deposit
-  const to = now + 24 * 3600;
-  const res = await conn.command("DEAL_GET_PAGE", { LOGIN: login, FROM: from, TO: to, OFFSET: 0, TOTAL: 500 });
-  if (res.retcode !== 0 || !res.json) return null;
-  let deals: any;
-  try {
-    deals = JSON.parse(res.json);
-  } catch {
-    return null;
-  }
-  const arr: any[] = Array.isArray(deals) ? deals : deals?.deals || deals?.data || [];
-  const match = arr.find(
+  const { deals } = await fetchAllDeals(conn, login);
+  const match = deals.find(
     (d) => d && typeof d.Comment === "string" && d.Comment.includes(reference) && Number(d.Action) === 2
   );
   return match ? String(match.Deal ?? "") : null;
