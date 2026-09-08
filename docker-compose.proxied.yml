@@ -32,22 +32,8 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       RUN_SEED: ${RUN_SEED}
-      CRON_SECRET: ${CRON_SECRET}
     ports:
       - "127.0.0.1:${WEB_PORT:-8080}:3000" # localhost only; your proxy reaches it
-
-  # Reconciliation sweep. Rival does not reliably call back, so poll for
-  # payments where the customer never returned to the site. Internal network
-  # only - never exposed publicly. Guarded by CRON_SECRET.
-  sweeper:
-    image: curlimages/curl:8.11.1
-    container_name: psp-sweeper
-    restart: unless-stopped
-    depends_on:
-      - web
-    environment:
-      CRON_SECRET: ${CRON_SECRET}
-    entrypoint: ["sh", "-c", "while true; do sleep 300; curl -fsS -m 60 -X POST -H \"x-cron-secret: $$CRON_SECRET\" http://web:3000/api/sweep >/dev/null 2>&1 || true; done"]
 
 volumes:
   psp_pgdata:

@@ -49,7 +49,6 @@ get_var() {
 AUTH_SECRET="$(get_var AUTH_SECRET)";             [ -z "$AUTH_SECRET" ] && AUTH_SECRET="$(gen 32)"
 POSTGRES_PASSWORD="$(get_var POSTGRES_PASSWORD)"; [ -z "$POSTGRES_PASSWORD" ] && POSTGRES_PASSWORD="$(gen 16)"
 ADMIN_EMAIL="$(get_var ADMIN_EMAIL)";             [ -z "$ADMIN_EMAIL" ] && ADMIN_EMAIL="admin@${DOMAIN}"
-CRON_SECRET="$(get_var CRON_SECRET)";               [ -z "$CRON_SECRET" ] && CRON_SECRET="$(gen 24)"
 ADMIN_PASSWORD="$(get_var ADMIN_PASSWORD)";       NEW_ADMIN=0
 if [ -z "$ADMIN_PASSWORD" ]; then ADMIN_PASSWORD="$(gen 9)"; NEW_ADMIN=1; fi
 
@@ -63,7 +62,6 @@ POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 DATABASE_URL=postgresql://psp:$POSTGRES_PASSWORD@db:5432/psp_portal?schema=public
 ADMIN_EMAIL=$ADMIN_EMAIL
 ADMIN_PASSWORD=$ADMIN_PASSWORD
-CRON_SECRET=$CRON_SECRET
 RUN_SEED=true
 WEB_PORT=$WEB_PORT
 EOF
@@ -126,12 +124,6 @@ cat <<EOF
 Also:
   - In MT5 Administrator, whitelist THIS server's public IP for the WebAPI manager.
   - Admin -> Settings: set Rival key, MT5 WebAPI host/login/password, min deposit, webhook.
-  - In the Rival dashboard, set the webhook URL to:
-        https://$DOMAIN/api/webhooks/rival
-    and paste the same secret into Admin -> Settings so the portal can verify it.
-  - Reconciliation runs automatically in the 'sweeper' container every 5 minutes.
-    To trigger it by hand:
-        curl -X POST -H "x-cron-secret: $CRON_SECRET" https://$DOMAIN/api/sweep
 
 Logs:   docker compose -f $COMPOSE logs -f
 Stop:   docker compose -f $COMPOSE down
