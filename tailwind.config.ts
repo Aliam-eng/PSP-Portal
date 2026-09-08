@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss";
 
-// Design tokens distilled from giv.trade: deep teal-black canvas, brand green
+// Design tokens distilled from giv.trade: deep navy canvas, brand green
 // with a neon-green glow accent, gold + danger, Plus Jakarta Sans, soft glow.
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
@@ -10,20 +10,20 @@ const config: Config = {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       colors: {
-        bg: "#03100f",
+        bg: "#0a1620",
         surface: {
-          DEFAULT: "#0a1413",
-          raised: "#0e1a18",
-          overlay: "#13201e",
+          DEFAULT: "#102330",
+          raised: "#142a38",
+          overlay: "#1a3342",
         },
         line: {
-          DEFAULT: "#1c2a27",
-          strong: "#273a36",
+          DEFAULT: "#1f3646",
+          strong: "#2b4759",
         },
         ink: {
-          DEFAULT: "#f3faf6",
-          muted: "#8ba097",
-          dim: "#5a6b65",
+          DEFAULT: "#eef5fa",
+          muted: "#8ba2b3",
+          dim: "#5f7484",
         },
         brand: {
           DEFAULT: "#00c24a",

@@ -18,7 +18,7 @@
     /* Calm ambient glows — premium fintech canvas, never noisy. */
     background-image:
       radial-gradient(55rem 55rem at 100% -10%, rgba(0, 194, 74, 0.10), transparent 60%),
-      radial-gradient(45rem 45rem at -10% 0%, rgba(57, 255, 20, 0.05), transparent 55%);
+      radial-gradient(45rem 45rem at -10% 0%, rgba(56, 130, 255, 0.07), transparent 55%);
     background-attachment: fixed;
   }
 
@@ -30,20 +30,20 @@
   /* Refined dark scrollbar */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #273a36 transparent;
+    scrollbar-color: #2b4759 transparent;
   }
   *::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
   *::-webkit-scrollbar-thumb {
-    background: #1c2a27;
+    background: #1f3646;
     border-radius: 9999px;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: #273a36;
+    background: #2b4759;
     background-clip: padding-box;
   }
 
