@@ -43,7 +43,8 @@ gen() {
 }
 get_var() {
   [ -f "$ENV_FILE" ] || return 0
-  grep -E "^$1=" "$ENV_FILE" | head -1 | cut -d= -f2- | sed 's/^"//;s/"$//'
+  # `|| true` so a missing key (grep exit 1) doesn't abort the script under set -e.
+  { grep -E "^$1=" "$ENV_FILE" || true; } | head -1 | cut -d= -f2- | sed 's/^"//;s/"$//'
 }
 
 AUTH_SECRET="$(get_var AUTH_SECRET)";             [ -z "$AUTH_SECRET" ] && AUTH_SECRET="$(gen 32)"
