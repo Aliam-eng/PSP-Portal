@@ -28,12 +28,26 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       AUTH_SECRET: ${AUTH_SECRET}
+      CRON_SECRET: ${CRON_SECRET}
       APP_BASE_URL: ${APP_BASE_URL}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       RUN_SEED: ${RUN_SEED}
     ports:
       - "127.0.0.1:${WEB_PORT:-8080}:3000" # localhost only; your proxy reaches it
+
+  cron:
+    image: curlimages/curl:latest
+    container_name: psp-cron
+    restart: unless-stopped
+    depends_on:
+      - web
+    environment:
+      CRON_SECRET: ${CRON_SECRET}
+      SWEEP_INTERVAL: ${SWEEP_INTERVAL:-300}
+    entrypoint: ["sh", "-c"]
+    command:
+      - 'while true; do curl -fsS -m 30 -X POST -H "x-cron-secret: $$CRON_SECRET" http://web:3000/api/sweep >/dev/null 2>&1 || true; sleep "$${SWEEP_INTERVAL:-300}"; done'
 
 volumes:
   psp_pgdata:

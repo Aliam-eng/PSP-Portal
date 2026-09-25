@@ -100,18 +100,36 @@ export async function reconcileTransaction(txId: string): Promise<Transaction | 
   });
 }
 
-// Sweep all non-terminal transactions (used by the poller endpoint).
-export async function sweepPending(limit = 50) {
+// Background sweep: reconcile ONLY awaiting deposits — those still waiting for
+// payment confirmation (LINK_GENERATED) or paid-but-not-yet-credited (PAID).
+// It deliberately skips terminal/failed states:
+//   • CREDITED / FAILED  — already done, nothing to do.
+//   • CREDIT_FAILED      — a paid deposit whose MT5 credit failed; these need a
+//                          look (e.g. wrong account) rather than silent retries,
+//                          so leave them to the admin "Sync" button.
+// Only recent ones, so we don't keep polling Rival for ancient abandoned links.
+// Errors are isolated per transaction — one bad row never breaks the whole run.
+export async function sweepPending(limit = 100, maxAgeDays = 14) {
+  const cutoff = new Date(Date.now() - maxAgeDays * 24 * 3600 * 1000);
   const pend = await prisma.transaction.findMany({
-    where: { status: { in: ["LINK_GENERATED", "PAID", "CREDIT_FAILED"] } },
+    where: {
+      status: { in: ["LINK_GENERATED", "PAID"] },
+      rivalPaymentId: { not: null },
+      createdAt: { gte: cutoff },
+    },
     orderBy: { createdAt: "asc" },
     take: limit,
     select: { id: true },
   });
   const results: Record<string, string> = {};
   for (const p of pend) {
-    const r = await reconcileTransaction(p.id);
-    if (r) results[p.id] = r.status;
+    try {
+      const r = await reconcileTransaction(p.id);
+      if (r) results[p.id] = r.status;
+    } catch (e: any) {
+      results[p.id] = "ERROR";
+      console.error(`[sweep] ${p.id} failed: ${e?.message || e}`);
+    }
   }
   return results;
 }
