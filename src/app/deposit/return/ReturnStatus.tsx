@@ -17,8 +17,11 @@ export function ReturnStatus(props: {
   const [status, setStatus] = useState(props.initialStatus);
   const [deal, setDeal] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [polling, setPolling] = useState(true);
+  const [elapsed, setElapsed] = useState(0);
   const inFlight = useRef(false);
+  const pollingRef = useRef(true);
+  const startRef = useRef(Date.now());
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sync = useCallback(async () => {
     if (inFlight.current) return; // don't overlap requests
@@ -29,23 +32,38 @@ export function ReturnStatus(props: {
       if (data.status) setStatus(data.status);
       if (data.mt5DealId) setDeal(data.mt5DealId);
       if (data.errorMessage) setErr(data.errorMessage);
-      if (data.status && TERMINAL.includes(data.status)) setPolling(false);
+      if (data.status && TERMINAL.includes(data.status)) pollingRef.current = false;
+    } catch {
+      /* transient — we'll try again on the next tick */
     } finally {
       inFlight.current = false;
+      setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
     }
   }, [props.txId]);
 
+  // Poll with back-off: fast at first, then ease off so we stay gentle on the
+  // provider's rate limit (and never hammer it if a payment lingers).
   useEffect(() => {
-    sync();
-    if (!polling) return;
-    const t = setInterval(sync, 2500);
-    return () => clearInterval(t);
-  }, [sync, polling]);
+    let active = true;
+    const tick = async () => {
+      await sync();
+      if (!active || !pollingRef.current) return;
+      const secs = (Date.now() - startRef.current) / 1000;
+      const delay = secs < 30 ? 2500 : secs < 120 ? 5000 : 10000;
+      timerRef.current = setTimeout(tick, delay);
+    };
+    tick();
+    return () => {
+      active = false;
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [sync]);
 
   const success = status === "CREDITED";
   const failed = status === "FAILED";
   const creditFailed = status === "CREDIT_FAILED";
   const pending = !success && !failed && !creditFailed;
+  const slow = pending && elapsed >= 60; // taking longer than usual
 
   const heading = success
     ? "Payment complete"
@@ -53,6 +71,8 @@ export function ReturnStatus(props: {
     ? "Payment received"
     : failed
     ? "Payment not completed"
+    : slow
+    ? "Still confirming…"
     : "Confirming your payment";
 
   const message = success
@@ -61,6 +81,8 @@ export function ReturnStatus(props: {
     ? "Your payment was received. Crediting your MT5 account needs attention — our team has been notified and will complete it shortly."
     : failed
     ? err || "The payment was not completed."
+    : slow
+    ? "This is taking a little longer than usual to confirm with Whish. You don't need to wait here — your deposit will be credited automatically once confirmed. You can safely close this page and check back anytime with your reference."
     : "We're confirming your payment and crediting your MT5 account. This usually takes just a few seconds — please keep this page open.";
 
   return (
@@ -85,7 +107,11 @@ export function ReturnStatus(props: {
 
       <div className="flex items-center justify-between gap-3 px-6 py-4">
         <span className="text-xs text-ink-dim">
-          {pending ? "Checking every couple of seconds — please don't close this page." : `Keep ref ${props.reference} for your records`}
+          {slow
+            ? `You can close this page — ref ${props.reference}`
+            : pending
+            ? "Checking every couple of seconds — please keep this page open."
+            : `Keep ref ${props.reference} for your records`}
         </span>
         <Link href="/deposit" className="btn-ghost px-3 py-1.5 text-xs">
           New deposit
