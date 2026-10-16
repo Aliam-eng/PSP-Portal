@@ -38,7 +38,7 @@ export function ReturnStatus(props: {
   useEffect(() => {
     sync();
     if (!polling) return;
-    const t = setInterval(sync, 4000);
+    const t = setInterval(sync, 2500);
     return () => clearInterval(t);
   }, [sync, polling]);
 
@@ -61,7 +61,7 @@ export function ReturnStatus(props: {
     ? "Your payment was received. Crediting your MT5 account needs attention — our team has been notified and will complete it shortly."
     : failed
     ? err || "The payment was not completed."
-    : "Waiting for payment confirmation. This page updates automatically.";
+    : "We're confirming your payment and crediting your MT5 account. This usually takes just a few seconds — please keep this page open.";
 
   return (
     <div className="card overflow-hidden">
@@ -85,7 +85,7 @@ export function ReturnStatus(props: {
 
       <div className="flex items-center justify-between gap-3 px-6 py-4">
         <span className="text-xs text-ink-dim">
-          {pending ? "Auto-refreshing…" : `Keep ref ${props.reference} for your records`}
+          {pending ? "Checking every couple of seconds — please don't close this page." : `Keep ref ${props.reference} for your records`}
         </span>
         <Link href="/deposit" className="btn-ghost px-3 py-1.5 text-xs">
           New deposit

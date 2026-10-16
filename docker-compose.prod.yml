@@ -43,10 +43,10 @@ services:
       - web
     environment:
       CRON_SECRET: ${CRON_SECRET}
-      SWEEP_INTERVAL: ${SWEEP_INTERVAL:-300}
+      SWEEP_INTERVAL: ${SWEEP_INTERVAL:-30}
     entrypoint: ["sh", "-c"]
     command:
-      - 'while true; do curl -fsS -m 30 -X POST -H "x-cron-secret: $$CRON_SECRET" http://web:3000/api/sweep >/dev/null 2>&1 || true; sleep "$${SWEEP_INTERVAL:-300}"; done'
+      - 'while true; do curl -fsS -m 30 -X POST -H "x-cron-secret: $$CRON_SECRET" http://web:3000/api/sweep >/dev/null 2>&1 || true; sleep "$${SWEEP_INTERVAL:-30}"; done'
 
   caddy:
     image: caddy:2-alpine
