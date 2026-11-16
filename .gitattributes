@@ -1,0 +1,10 @@
+# Shell scripts MUST stay LF — CRLF breaks them when run on the Linux server.
+*.sh text eol=lf
+
+# Binary files — never apply line-ending conversion (would corrupt them).
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.webp binary
