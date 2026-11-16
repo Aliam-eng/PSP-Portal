@@ -97,6 +97,23 @@ model ProviderConfig {
   updatedAt         DateTime @updatedAt
 }
 
+// Read-only API keys for the external management/CRM API (GET /api/v1/...).
+// Only a SHA-256 hash of the key is stored; the plaintext is shown once at
+// creation. Revoke by setting revokedAt — checked on every request.
+model ApiKey {
+  id             String    @id @default(cuid())
+  name           String // label, e.g. "FXBO integration"
+  keyHash        String    @unique // sha256(key) hex
+  prefix         String // first chars shown in the admin list, e.g. psp_live_a1b2c3d4
+  scopes         String    @default("transactions:read")
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdByEmail String?
+  createdAt      DateTime  @default(now())
+
+  @@index([keyHash])
+}
+
 model Mt5Config {
   id           String   @id @default("mt5")
   // MT5 WebAPI connection (entered in Settings; the app talks WebAPI directly).

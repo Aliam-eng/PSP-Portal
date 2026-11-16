@@ -30,6 +30,8 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       RUN_SEED: ${RUN_SEED}
+      API_RATE_RPM: ${API_RATE_RPM:-60}
+      API_MAX_CONCURRENT: ${API_MAX_CONCURRENT:-5}
     expose:
       - "3000" # internal only; Caddy terminates TLS and proxies to it
 
